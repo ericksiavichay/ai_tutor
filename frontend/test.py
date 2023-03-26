@@ -61,10 +61,10 @@ def visualize_and_explain(question, answer):
         st.error(f"Error fetching visualization and explanation: {e}")
         return None
 
-def generate_question():
+def generate_question(question):
     return "Generated Question"
     try:
-        response = requests.get("http://localhost:5000/generate_question")
+        response = requests.get("http://localhost:5000/generate_question?previous_question={question}")
         response.raise_for_status()
         return response.json().get("question")
     except requests.exceptions.RequestException as e:
@@ -121,7 +121,7 @@ def display_questions_page(module):
             if result == "correct":
                 # print(2, st.session_state.been_wrong)
                 if "been_wrong" in st.session_state and st.session_state.been_wrong:
-                    generated_question = generate_question()
+                    generated_question = generate_question(current_question)
                     print(generated_question)
                     st.session_state.generated_question = generated_question
                 # if "generated_question" in st.session_state:
