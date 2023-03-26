@@ -109,7 +109,7 @@ def visualize_and_explain():
     # Get input text from request body
     question = request.json['question']
     PREFIX_MSG = "generate some html, css and javascript code to explain a 4th grader, give me answer in code block no explanation. How to: "
-    SUFFIX_MSG =  "provide me an input to test my understanding of each single sub step, and correct me after each substep"
+    SUFFIX_MSG =  "provide me an input to test my understanding of each single sub step. And correct me after each substep Don’t provide any text. CODE ONLY Start with <html> End with </html>"
     context = [
             {"role": "system", "content": "You are an expert programmer that only outputs code in a single file"}, # you can change this to 'You are an expert programmer that only outputs code" etc
         ]
@@ -124,7 +124,7 @@ def visualize_and_explain():
     prompt = PREFIX_MSG + question + SUFFIX_MSG
     response = call_openai_api(prompt, context)
     explanation  = response["ai_message"]
-    return jsonify({"code": code, "explanation": explanation}), 200
+    return jsonify({"html": code, "explanation": explanation}), 200
 
 if __name__ == '__main__':
     app.run()
