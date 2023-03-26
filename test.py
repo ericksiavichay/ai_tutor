@@ -3,7 +3,7 @@ import prompt_toolkit
 import os
 
 engine = "gpt-4"
-openai.api_key = "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" # you might have to change this to your key
+openai.api_key = "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" # you might have to change this to your key
 
 def generate_response(prompt, conversation_history):
     conversation_history.append({"role": "user", "content": prompt})
