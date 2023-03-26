@@ -9,9 +9,27 @@ CORS(app)
 
 OPENAI_API_KEY = "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"
 engine = "gpt-4"
-conversation_history = [
+originial_context = [
             {"role": "system", "content": "You are a helpful assistant, and an expert in all things."}, # you can change this to 'You are an expert programmer that only outputs code" etc
         ]
+context = originial_context
+modules = ["fractions", "python basics"]
+questions = {"fractions": ["What is sum of the fractions 3/4 and 8/12?", "What is the difference of the fractions 3/4 and 8/12?"], 
+"python basics":["Given the radius return the circumference of a circle", "write a class with an init function that takes in the radius of a circle and a circumference function that returns the circumference of the circle"] }
+goals = {"fractions": ["Learn how to add two fractions", "Learn how to subtract two fractions"],
+"python_basics": ["Learn how to define functions in python that accept arguments and returns values", "Learn how to define and uses classes in python"]
+}
+@app.route('/get_modules', methods=['GET'])
+def get_modules():
+    return jsonify({"modules": modules}), 200
+
+@app.route('/get_questions', methods=['GET'])
+def get_questions():
+    global context
+    data = request.get_json()
+    questions = data.get('module')
+    context = originial_context
+    return jsonify({"questions": questions[modules]}), 200
 
 @app.route('/check_answer', methods=['POST'])
 def check_answer():
@@ -23,30 +41,34 @@ def check_answer():
     :response: answer - [yes, no] Check if the user response is correct
     """
     data = request.get_json()
+    student_answer = data.get('answer')
     question = data.get('question')
-    answer = data.get('answer')
-    prompt = "Suppose a question a student is trying to answer is the following: '" + question + "'\n" + ". The student's answer is: '" + answer + "'\n Is the above answer to the question correct \n Think really hard before you answer"
-    context = [item.copy() for item in conversation_history]
-    if not prompt:
-        return jsonify({'error': 'Invalid input. Please provide a prompt.'}), 400
+    check_context = [item.copy() for item in context]
+    check_context.append({"role": "system", "content": "Suppose a question a student is trying to answer is the following: '" + question + "'\n" + ". The student's answer is: '" + student_answer + "'\n Is the above answer to the question correct? \n Think really hard before you answer. You can only say 'correct' or 'incorrect' as your response in regards to the current context."})
+
+    # if not prompt:
+    #     return jsonify({'error': 'Invalid input. Please provide a prompt.'}), 400
     if not context:
         return jsonify({'error': 'Invalid input. Please provide a context.'}), 400
     # context.append({"role": "system", "content": "You can only say correct or incorrect, exclusively."})
-    response = call_openai_api(prompt, context)
-    prompt = "Answer in one word is the students answer 'correct' or 'incorrect'?"
-    response = call_openai_api(prompt, response["context"])
-    answer = response["ai_message"].lower()
-    if answer not in ["correct", "incorrect"]:
+    '''ask correct or incorrect one more time and choose the second answer'''
+    response = call_openai_api(check_context, student_answer)
+    # prompt = "Answer in one word is the students answer 'correct' or 'incorrect'?"
+    # response (prompt, response["context"])
+    # answer = response["ai_message"].lower()
+    if response not in ["correct", "incorrect"]:
         return {"error": "Invalid response from the GPT-4 model."}
 
     if 'error' in response:
         return jsonify(response), 400
 
-    return jsonify({"answer": answer}), 200
+    return jsonify({"answer": student_answer}), 200
 
-def call_openai_api(prompt, context):
+
+def call_openai_api(context, prompt=None):
     try:
-        context.append({"role": "user", "content": prompt})
+        if prompt:
+            context.append({"role": "user", "content": prompt})
         response = openai.ChatCompletion.create(
             model="gpt-4",  # Replace with the appropriate model name for GPT-4
             messages=context,
@@ -63,18 +85,46 @@ def call_openai_api(prompt, context):
     except requests.exceptions.RequestException as e:
         return {"error": str(e)}
 
-@app.route('/generate_question', methods=['POST'])
-def generate_question():
+
+@app.route('/student_query', methods=['POST'])
+def student_query():
     data = request.get_json()
-    context = data.get('context')
     system_content = """
-        Given that the student has not answered the question correctly, create a follow-up question that will aid the student in achieving the final objective that was stated earlier in the context. Ask the student a question to probe if they are confused with this follow-up response. Do not give the student the final answer either; only guide them.
-        Start with the sentence, 'Here is a follow-up question to help you reach the next step: '. Afterwards, generate a follow-up question after the colon.
+    You are a helpful AI assistant. Provide a detailed explanation to the questions that the student asks you. Let's take it one step at a time 
     """
     context.append({"role": "system", "content": {system_content}})
-    ai_contents = call_openai_api("", context) # ai_message, context
+@app.route('/generate_question', methods=['POST'])
+def generate_question():
+    # data = request.get_json()
+    # context = data.get('context')
+    system_content = f"You will now generate a similar question that also satisfies the original objective: {teacher_goal}."
+    context.append({"role": "system", "content": {system_content}})
+    ai_contents = call_openai_api(context) # ai_message, context
     
     return ai_contents
+
+# Define endpoint for visualizing and explaining input text
+@app.route('/visualize_and_explain', methods=['POST'])
+def visualize_and_explain():
+    # Get input text from request body
+    question = request.json['question']
+    PREFIX_MSG = "generate some html, css and javascript code to explain a 4th grader, give me answer in code block no explanation. How to: "
+    SUFFIX_MSG =  "provide me an input to test my understanding of each single sub step, and correct me after each substep"
+    context = [
+            {"role": "system", "content": "You are an expert programmer that only outputs code in a single file"}, # you can change this to 'You are an expert programmer that only outputs code" etc
+        ]
+    prompt = PREFIX_MSG + question + SUFFIX_MSG
+    response = call_openai_api(prompt, context)
+    code = response["ai_message"]
+    context = [
+                {"role": "system", "content": "You are an expert at explaining simple math concepts"}, # you can change this to 'You are an expert programmer that only outputs code" etc
+            ]
+    PREFIX_MSG = "Explain the answer to the following question to a 4th grader: "
+    SUFFIX_MSG = "\nLet's take it one step at a time."
+    prompt = PREFIX_MSG + question + SUFFIX_MSG
+    response = call_openai_api(prompt, context)
+    explanation  = response["ai_message"]
+    return jsonify({"code": code, "explanation": explanation}), 200
 
 if __name__ == '__main__':
     app.run()
