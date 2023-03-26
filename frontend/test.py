@@ -3,7 +3,7 @@ import requests
 import random
 
 def fetch_modules():
-    return ["Module 1", "Module 2", "Module 3"]
+    return ["math", "cs", "Module 3"]
     try:
         response = requests.get("http://localhost:5000/get_modules_with_progress")
         response.raise_for_status()
@@ -24,6 +24,7 @@ def fetch_questions(module):
 
 def check_answer(question, answer):
     value = random.choice(["correct", "not correct"])
+    print(value)
     return value
     try:
         response = requests.post("http://localhost:5000/check_answer", json={"question": question, "answer": answer})
@@ -36,7 +37,7 @@ def check_answer(question, answer):
 def freeform_query(question, user_query):
     return "Answer"
     try:
-        response = requests.post("http://localhost:5000/freeform_query", json={"question": question, "user_query": user_query})
+        response = requests.post("http://localhost:5000/student_query", json={"question": question, "student_query": user_query})
         response.raise_for_status()
         return response.json().get("response")
     except requests.exceptions.RequestException as e:
@@ -79,50 +80,73 @@ def display_questions_page(module):
 
     question_index = st.session_state.get("question_index", 0)
 
-    if "show_wrong" in st.session_state and st.session_state.show_wrong:
-        st.write("Wrong answer!")
+    # if "show_wrong" in st.session_state and st.session_state.show_wrong:
+    #     st.write("Wrong answer!")
 
-        if st.button("Next"):
-            generated_question = generate_question()
-            st.session_state.generated_question = generated_question
-            if question_index + 1 < len(questions):
-                st.session_state.question_index = question_index + 1
-            else:
-                st.session_state.question_index = 0
-            st.session_state.show_wrong = False
+    #     if st.button("Next"):
+    #         generated_question = generate_question()
+    #         st.session_state.generated_question = generated_question
+    #         if question_index + 1 < len(questions):
+    #             st.session_state.question_index = question_index + 1
+    #         else:
+    #             st.session_state.question_index = 0
+    #         st.session_state.show_wrong = False
 
-        visualization_data = visualize_and_explain(questions[question_index], st.session_state.user_answer)
-        if visualization_data:
-            st.write(visualization_data["explanation"])
-            st.write("Visualization:")
-            st.components.v1.html(visualization_data["html"], height=1000)
-    else:
-        current_question = st.session_state.generated_question if "generated_question" in st.session_state else questions[question_index]
-        with st.sidebar:
-            st.write("Ask Questions")
-            user_query = st.text_input("Your question:")
-            if st.button("Ask", key="ask_button", help="Click to ask your question") or user_query:
-                response = freeform_query(current_question, user_query)
-                if response is not None:
-                    st.write(response)
-        
-        # st.write(f"Question {question_index + 1}/{len(questions)}:")
-        st.write(current_question)
-        user_answer = st.text_input("Your answer:")
+    #     visualization_data = visualize_and_explain(questions[question_index], st.session_state.user_answer)
+    #     if visualization_data:
+    #         st.write(visualization_data["explanation"])
+    #         st.write("Visualization:")
+    #         st.components.v1.html(visualization_data["html"], height=1000)
+    current_question = st.session_state.generated_question if "generated_question" in st.session_state else questions[question_index]
+    if "been_wrong" not in st.session_state:
+        st.session_state.been_wrong = False
+    if "generated_question" in st.session_state:
+        del st.session_state.generated_question
+    # print(1)
+    with st.sidebar:
+        st.write("Ask Questions")
+        user_query = st.text_input("Your question:")
+        if st.button("Ask", key="ask_button", help="Click to ask your question") or user_query:
+            response = freeform_query(current_question, user_query)
+            if response is not None:
+                st.write(response)
+    
+    # st.write(f"Question {question_index + 1}/{len(questions)}:")
+    st.write(current_question)
+    user_answer = st.text_input("Your answer:")
 
-        if st.button("Submit"):
-            result = check_answer(current_question, user_answer)
-            if result is not None:
-                if result == "correct":
+    if st.button("Submit"):
+        result = check_answer(current_question, user_answer)
+        if result is not None:
+            if result == "correct":
+                # print(2, st.session_state.been_wrong)
+                if "been_wrong" in st.session_state and st.session_state.been_wrong:
+                    generated_question = generate_question()
+                    print(generated_question)
+                    st.session_state.generated_question = generated_question
+                # if "generated_question" in st.session_state:
+                #     del st.session_state.generated_question
+                elif question_index + 1 < len(questions):
                     if "generated_question" in st.session_state:
                         del st.session_state.generated_question
-                    elif question_index + 1 < len(questions):
-                        st.session_state.question_index = question_index + 1
-                    else:
-                        st.session_state.question_index = 0
+                    st.session_state.question_index = question_index + 1
                 else:
-                    st.session_state.show_wrong = True
-                    st.session_state.user_answer = user_answer
+                    if "generated_question" in st.session_state:
+                        del st.session_state.generated_question 
+                    st.session_state.question_index = 0
+            else:
+                st.session_state.been_wrong = True
+                # print(3)
+                if module == "math":
+                    visualization_data = visualize_and_explain(current_question, user_answer)
+                    if visualization_data:
+                        st.write(visualization_data["explanation"])
+                        st.write("Visualization:")
+                        st.components.v1.html(visualization_data["html"], height=1000)
+                elif module == "cs":
+                    hint = requests.get("http://localhost:5000/get_hint?question={question}&answer={answer}")
+                    st.write(hint)
+
 
 
 def display_teacher_mode():
